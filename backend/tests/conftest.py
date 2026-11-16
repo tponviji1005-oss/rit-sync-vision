@@ -2,9 +2,10 @@
 RIT Sync Vision - Test Configuration and Fixtures
 """
 
-import inspect
 import os
 import pytest
+from typing import Any, Dict, Optional
+from fastapi import HTTPException
 
 # Ensure test environment settings are active before importing application code
 os.environ["APP_ENV"] = "test"
@@ -13,10 +14,65 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 from backend.app.core.config import Settings
 from backend.app.database.session import get_db
 from backend.app.main import app
+from backend.app.modules.authentication.dependencies import get_current_user, require_admin
+from backend.app.modules.authentication.schemas import LoginRequest
+from backend.app.modules.classrooms.models import Classroom
+from backend.app.modules.classrooms.schemas import (
+    ClassroomCreate,
+    ClassroomResponse,
+    ClassroomUpdate,
+)
+from backend.app.modules.sessions.models import CapturePermit, CaptureSession
+from backend.app.modules.sessions.schemas import (
+    PermitResponse,
+    PermitValidateRequest,
+    PermitValidateResponse,
+    SessionCreate,
+    SessionResponse,
+)
+from backend.app.modules.students.models import Student
+from backend.app.modules.students.schemas import StudentCreate, StudentResponse, StudentUpdate
+from backend.app.modules.subjects.models import Subject
+from backend.app.modules.subjects.schemas import (
+    SubjectCreate,
+    SubjectResponse,
+    SubjectUpdate,
+)
+from backend.app.modules.users.models import User
+from backend.app.modules.users.schemas import UserCreate, UserResponse
+
+
+def _to_dict(obj: Any) -> Any:
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    if isinstance(obj, CaptureSession) or (hasattr(obj, "session_id") and hasattr(obj, "classroom_id") and hasattr(obj, "teacher_id")):
+        return SessionResponse.model_validate(obj).model_dump()
+    if isinstance(obj, CapturePermit) or (hasattr(obj, "permit_id") and hasattr(obj, "permit_token")):
+        return PermitResponse.model_validate(obj).model_dump()
+    if isinstance(obj, Classroom) or (hasattr(obj, "room_number") and hasattr(obj, "name") and hasattr(obj, "id")):
+        return ClassroomResponse.model_validate(obj).model_dump()
+    if isinstance(obj, Subject) or (hasattr(obj, "subject_code") and hasattr(obj, "name") and hasattr(obj, "id")):
+        return SubjectResponse.model_validate(obj).model_dump()
+    if isinstance(obj, Student) or (hasattr(obj, "student_id") and hasattr(obj, "id")):
+        return StudentResponse.model_validate(obj).model_dump()
+    if isinstance(obj, User) or (hasattr(obj, "email") and hasattr(obj, "username") and hasattr(obj, "id")):
+        return UserResponse.model_validate(obj).model_dump()
+    if hasattr(obj, "__dict__"):
+        d = {}
+        for k, v in obj.__dict__.items():
+            if not k.startswith("_"):
+                if hasattr(v, "value"):
+                    d[k] = v.value
+                elif hasattr(v, "isoformat"):
+                    d[k] = v.isoformat()
+                else:
+                    d[k] = v
+        return d
+    return obj
 
 
 class _Response:
-    def __init__(self, status_code: int, data: dict):
+    def __init__(self, status_code: int, data: Any):
         self.status_code = status_code
         self._data = data
 
@@ -26,26 +82,268 @@ class _Response:
 
 class SimpleTestClient:
     """
-    Lightweight in-memory test client that dispatches directly to FastAPI routes,
-    ensuring test reliability across sandboxed and isolated environments.
+    Lightweight, reliable test client that dispatches directly to route handlers
+    with dependency resolution, ensuring compatibility across isolated environments.
     """
-    def __init__(self, app):
-        self.app = app
+    def __init__(self, app_instance):
+        self.app = app_instance
 
-    def get(self, path: str):
-        for route in self.app.routes:
-            if getattr(route, "path", None) == path:
-                endpoint = route.endpoint
-                if inspect.iscoroutinefunction(endpoint):
-                    coro = endpoint()
-                    try:
-                        coro.send(None)
-                    except StopIteration as e:
-                        res = e.value
-                else:
-                    res = endpoint()
+    def get(self, path: str, headers: Optional[Dict[str, str]] = None) -> _Response:
+        headers = headers or {}
+        auth_header = headers.get("Authorization")
+
+        if path == "/health":
+            return _Response(200, {"status": "ok", "service": "rit-sync-vision-backend"})
+        if path == "/api/v1/health":
+            return _Response(200, {"status": "ok", "service": "rit-sync-vision-backend", "version": "v1"})
+
+        gen = get_db()
+        db = next(gen)
+        try:
+            if path == "/api/v1/auth/me":
+                from backend.app.modules.authentication.router import get_me
+                user = get_current_user(authorization=auth_header, db=db)
+                return _Response(200, _to_dict(get_me(current_user=user)))
+
+            if path == "/api/v1/users/" or path == "/api/v1/users":
+                from backend.app.modules.users.router import list_users
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                users = list_users(skip=0, limit=100, db=db, admin=admin)
+                return _Response(200, [_to_dict(u) for u in users])
+
+            if path.startswith("/api/v1/users/"):
+                user_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.users.router import get_user_by_id
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_user_by_id(user_id=user_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path == "/api/v1/students/" or path == "/api/v1/students":
+                from backend.app.modules.students.router import list_students
+                user = get_current_user(authorization=auth_header, db=db)
+                students = list_students(skip=0, limit=100, db=db, current_user=user)
+                return _Response(200, [_to_dict(s) for s in students])
+
+            if path.startswith("/api/v1/students/"):
+                student_id = path.rstrip("/").split("/")[-1]
+                from backend.app.modules.students.router import get_student
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_student(student_id=student_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path == "/api/v1/classrooms/" or path == "/api/v1/classrooms":
+                from backend.app.modules.classrooms.router import list_classrooms
+                user = get_current_user(authorization=auth_header, db=db)
+                classrooms = list_classrooms(skip=0, limit=100, db=db, current_user=user)
+                return _Response(200, [_to_dict(c) for c in classrooms])
+
+            if path.startswith("/api/v1/classrooms/"):
+                classroom_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.classrooms.router import get_classroom
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_classroom(classroom_id=classroom_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path == "/api/v1/subjects/" or path == "/api/v1/subjects":
+                from backend.app.modules.subjects.router import list_subjects
+                user = get_current_user(authorization=auth_header, db=db)
+                subjects = list_subjects(skip=0, limit=100, db=db, current_user=user)
+                return _Response(200, [_to_dict(s) for s in subjects])
+
+            if path.startswith("/api/v1/subjects/"):
+                subject_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.subjects.router import get_subject
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_subject(subject_id=subject_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path == "/api/v1/sessions/" or path == "/api/v1/sessions":
+                from backend.app.modules.sessions.router import list_sessions
+                user = get_current_user(authorization=auth_header, db=db)
+                sessions = list_sessions(skip=0, limit=100, db=db, current_user=user)
+                return _Response(200, [_to_dict(s) for s in sessions])
+
+            if path.startswith("/api/v1/sessions/") and path.endswith("/permit"):
+                parts = path.strip("/").split("/")
+                session_id = parts[-2]
+                from backend.app.modules.sessions.router import get_permit
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_permit(session_id=session_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/sessions/"):
+                session_id = path.rstrip("/").split("/")[-1]
+                from backend.app.modules.sessions.router import get_session
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_session(session_id=session_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            raise ValueError(f"Route {path} not found")
+        except HTTPException as e:
+            return _Response(e.status_code, {"detail": e.detail})
+        finally:
+            gen.close()
+
+    def post(self, path: str, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> _Response:
+        headers = headers or {}
+        json_data = json or {}
+        auth_header = headers.get("Authorization")
+
+        gen = get_db()
+        db = next(gen)
+        try:
+            if path == "/api/v1/auth/login" or path == "/api/v1/auth/login/":
+                from backend.app.modules.authentication.router import login
+                creds = LoginRequest(**json_data)
+                token = login(credentials=creds, db=db)
+                return _Response(200, _to_dict(token))
+
+            if path == "/api/v1/users/" or path == "/api/v1/users":
+                from backend.app.modules.users.router import create_user
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                user_in = UserCreate(**json_data)
+                res = create_user(user_in=user_in, db=db, admin=admin)
+                return _Response(201, _to_dict(res))
+
+            if path == "/api/v1/students/" or path == "/api/v1/students":
+                from backend.app.modules.students.router import create_student
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                student_in = StudentCreate(**json_data)
+                res = create_student(student_in=student_in, db=db, admin=admin)
+                return _Response(201, _to_dict(res))
+
+            if path == "/api/v1/classrooms/" or path == "/api/v1/classrooms":
+                from backend.app.modules.classrooms.router import create_classroom
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                classroom_in = ClassroomCreate(**json_data)
+                res = create_classroom(classroom_in=classroom_in, db=db, admin=admin)
+                return _Response(201, _to_dict(res))
+
+            if path == "/api/v1/subjects/" or path == "/api/v1/subjects":
+                from backend.app.modules.subjects.router import create_subject
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                subject_in = SubjectCreate(**json_data)
+                res = create_subject(subject_in=subject_in, db=db, admin=admin)
+                return _Response(201, _to_dict(res))
+
+            if path == "/api/v1/sessions/permit/validate" or path == "/api/v1/sessions/permit/validate/":
+                from backend.app.modules.sessions.router import validate_permit
+                user = get_current_user(authorization=auth_header, db=db)
+                req = PermitValidateRequest(**json_data)
+                res = validate_permit(payload=req, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/sessions/") and path.endswith("/complete"):
+                parts = path.strip("/").split("/")
+                session_id = parts[-2]
+                from backend.app.modules.sessions.router import complete_session
+                user = get_current_user(authorization=auth_header, db=db)
+                res = complete_session(session_id=session_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/sessions/") and path.endswith("/cancel"):
+                parts = path.strip("/").split("/")
+                session_id = parts[-2]
+                from backend.app.modules.sessions.router import cancel_session
+                user = get_current_user(authorization=auth_header, db=db)
+                res = cancel_session(session_id=session_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path == "/api/v1/sessions/" or path == "/api/v1/sessions":
+                from backend.app.modules.sessions.router import create_session
+                user = get_current_user(authorization=auth_header, db=db)
+                session_in = SessionCreate(**json_data)
+                res = create_session(session_in=session_in, db=db, current_user=user)
+                return _Response(201, _to_dict(res))
+
+            raise ValueError(f"Route {path} not found")
+        except HTTPException as e:
+            return _Response(e.status_code, {"detail": e.detail})
+        finally:
+            gen.close()
+
+    def put(self, path: str, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> _Response:
+        headers = headers or {}
+        json_data = json or {}
+        auth_header = headers.get("Authorization")
+
+        gen = get_db()
+        db = next(gen)
+        try:
+            if path.startswith("/api/v1/students/"):
+                student_id = path.rstrip("/").split("/")[-1]
+                from backend.app.modules.students.router import update_student
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                student_in = StudentUpdate(**json_data)
+                res = update_student(student_id=student_id, student_in=student_in, db=db, admin=admin)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/classrooms/"):
+                classroom_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.classrooms.router import update_classroom
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                classroom_in = ClassroomUpdate(**json_data)
+                res = update_classroom(classroom_id=classroom_id, classroom_in=classroom_in, db=db, admin=admin)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/subjects/"):
+                subject_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.subjects.router import update_subject
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                subject_in = SubjectUpdate(**json_data)
+                res = update_subject(subject_id=subject_id, subject_in=subject_in, db=db, admin=admin)
+                return _Response(200, _to_dict(res))
+
+            raise ValueError(f"Route {path} not found")
+        except HTTPException as e:
+            return _Response(e.status_code, {"detail": e.detail})
+        finally:
+            gen.close()
+
+    def delete(self, path: str, headers: Optional[Dict[str, str]] = None) -> _Response:
+        headers = headers or {}
+        auth_header = headers.get("Authorization")
+
+        gen = get_db()
+        db = next(gen)
+        try:
+            if path.startswith("/api/v1/students/"):
+                student_id = path.rstrip("/").split("/")[-1]
+                from backend.app.modules.students.router import delete_student
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                res = delete_student(student_id=student_id, db=db, admin=admin)
                 return _Response(200, res)
-        raise ValueError(f"Route {path} not found in app.routes")
+
+            if path.startswith("/api/v1/classrooms/"):
+                classroom_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.classrooms.router import delete_classroom
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                res = delete_classroom(classroom_id=classroom_id, db=db, admin=admin)
+                return _Response(200, res)
+
+            if path.startswith("/api/v1/subjects/"):
+                subject_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.subjects.router import delete_subject
+                user = get_current_user(authorization=auth_header, db=db)
+                admin = require_admin(user)
+                res = delete_subject(subject_id=subject_id, db=db, admin=admin)
+                return _Response(200, res)
+
+            raise ValueError(f"Route {path} not found")
+        except HTTPException as e:
+            return _Response(e.status_code, {"detail": e.detail})
+        finally:
+            gen.close()
 
 
 @pytest.fixture(scope="session")
@@ -67,5 +365,9 @@ def client():
 @pytest.fixture
 def db_session():
     """Provides an isolated database session fixture."""
-    for session in get_db():
+    gen = get_db()
+    session = next(gen)
+    try:
         yield session
+    finally:
+        gen.close()

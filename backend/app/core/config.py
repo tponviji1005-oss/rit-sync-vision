@@ -5,6 +5,7 @@ RIT Sync Vision - Core Configuration Settings
 import os
 from pathlib import Path
 from typing import Optional
+from pydantic import model_validator
 
 # Path to the repository root where .env is located
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
@@ -42,6 +43,18 @@ try:
             extra="ignore",
         )
 
+        @model_validator(mode="after")
+        def validate_production_secret(self):
+            # SEC-03: Block startup in production if secret key is the insecure default
+            if (
+                self.APP_ENV.lower() == "production"
+                and self.SECRET_KEY == "change-this-secret-key-in-production"
+            ):
+                raise ValueError(
+                    "Insecure SECRET_KEY: Default secret key cannot be used in production environment."
+                )
+            return self
+
 except ImportError:
     from pydantic import BaseModel
 
@@ -67,6 +80,18 @@ except ImportError:
         CAMERA_RTSP_STREAM_URL: str = ""
         CONFIDENCE_THRESHOLD: float = 0.65
         DETECTION_MODEL_PATH: str = "ai_engine/models/"
+
+        @model_validator(mode="after")
+        def validate_production_secret(self):
+            # SEC-03: Block startup in production if secret key is the insecure default
+            if (
+                self.APP_ENV.lower() == "production"
+                and self.SECRET_KEY == "change-this-secret-key-in-production"
+            ):
+                raise ValueError(
+                    "Insecure SECRET_KEY: Default secret key cannot be used in production environment."
+                )
+            return self
 
         def __init__(self, **kwargs):
             data = {}

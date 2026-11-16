@@ -55,11 +55,12 @@ except ImportError:
             return self._cursor.fetchall()
 
     class _MockSession:
-        def __init__(self, connection):
+        def __init__(self, connection, is_shared: bool = False):
             self.connection = connection
+            self.is_shared = is_shared
 
         def close(self):
-            if self.connection:
+            if self.connection and not self.is_shared:
                 self.connection.close()
 
         def commit(self):
@@ -72,25 +73,36 @@ except ImportError:
 
         def execute(self, statement, *args, **kwargs):
             if self.connection:
-                # Handle statement string or text()
                 sql = str(statement)
                 cursor = self.connection.cursor()
-                cursor.execute(sql)
+                cursor.execute(sql, *args, **kwargs)
                 return _MockCursor(cursor)
 
     engine = None
     SessionLocal = None
+    _shared_mem_conn = None
 
     def get_db():
         """
         Fallback SQLite session dependency when SQLAlchemy is not installed.
+        Supports shared in-memory databases for tests.
         """
+        global _shared_mem_conn
         db_path = settings.DATABASE_URL.replace("sqlite:///", "")
-        if db_path and db_path != ":memory:" and not db_path.startswith(":"):
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(db_path if db_path else ":memory:", check_same_thread=False)
-        session = _MockSession(conn)
-        try:
-            yield session
-        finally:
-            session.close()
+        if not db_path or db_path == ":memory:":
+            if _shared_mem_conn is None:
+                _shared_mem_conn = sqlite3.connect("file::memory:?cache=shared", uri=True, check_same_thread=False)
+            session = _MockSession(_shared_mem_conn, is_shared=True)
+            try:
+                yield session
+            finally:
+                pass
+        else:
+            if not db_path.startswith(":"):
+                Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            session = _MockSession(conn, is_shared=False)
+            try:
+                yield session
+            finally:
+                session.close()
