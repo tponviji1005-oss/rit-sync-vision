@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import AuthLayout from './components/layout/AuthLayout'
+import DashboardLayout from './components/layout/DashboardLayout'
 import AttendanceRecords from './pages/AttendanceRecords'
 import AttendanceReview from './pages/AttendanceReview'
 import Classes from './pages/Classes'
@@ -11,15 +13,20 @@ import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Students from './pages/Students'
 import SystemStatus from './pages/SystemStatus'
-import DashboardLayout from './components/layout/DashboardLayout'
 
 function App() {
   const [activePage, setActivePage] = useState('Dashboard')
 
+  if (activePage === 'Login / Authentication') {
+    return (
+      <AuthLayout onBack={() => setActivePage('Dashboard')}>
+        <Login />
+      </AuthLayout>
+    )
+  }
+
   const pageContent =
-    activePage === 'Login / Authentication' ? (
-      <Login />
-    ) : activePage === 'Dashboard' ? (
+    activePage === 'Dashboard' ? (
       <Dashboard />
     ) : activePage === 'Classes' ? (
       <Classes />
