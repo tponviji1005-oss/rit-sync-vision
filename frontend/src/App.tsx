@@ -1,6 +1,19 @@
 import { useState } from 'react'
+import AttendanceRecords from './pages/AttendanceRecords'
+import AttendanceReview from './pages/AttendanceReview'
+import Classes from './pages/Classes'
+import Dashboard from './pages/Dashboard'
+import FaceRegistration from './pages/FaceRegistration'
+import LiveCapture from './pages/LiveCapture'
+import Login from './pages/Login'
+import Profile from './pages/Profile'
+import Reports from './pages/Reports'
+import Settings from './pages/Settings'
+import Students from './pages/Students'
+import SystemStatus from './pages/SystemStatus'
 
 const pages = [
+  'Login / Authentication',
   'Dashboard',
   'Classes',
   'Students',
@@ -11,12 +24,7 @@ const pages = [
   'Reports',
   'System Status',
   'Settings',
-]
-
-const todayClasses = [
-  { name: 'CSE - A', subject: 'AI (CS301)', time: '10:00 AM' },
-  { name: 'CSE - B', subject: 'DBMS (CS302)', time: '11:30 AM' },
-  { name: 'CSE - F', subject: 'OS (CS403)', time: '02:00 PM' },
+  'Profile / Account',
 ]
 
 function App() {
@@ -53,75 +61,30 @@ function App() {
       </aside>
 
       <main className="min-w-0 flex-1 p-5 md:p-8">
-        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="mb-1 text-sm text-gray-400">Teacher workspace</p>
-            <h1 className="text-2xl font-semibold">{activePage}</h1>
-          </div>
-          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
-            Preview data
-          </span>
-        </header>
-
-        {activePage === 'Dashboard' ? (
-          <>
-            <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {[
-                ['Students enrolled', '246'],
-                ['Sessions today', '3'],
-                ['Present candidates', '94.3%'],
-              ].map(([label, value]) => (
-                <article
-                  key={label}
-                  className="rounded-xl border border-white/10 bg-[#18181b] p-5"
-                >
-                  <p className="text-sm text-gray-400">{label}</p>
-                  <p className="mt-3 text-3xl font-semibold">{value}</p>
-                </article>
-              ))}
-            </section>
-
-            <section className="rounded-xl border border-white/10 bg-[#18181b]">
-              <div className="border-b border-white/10 p-5">
-                <h2 className="font-semibold">Today’s classes</h2>
-                <p className="mt-1 text-sm text-gray-400">
-                  Example schedule for the interface preview
-                </p>
-              </div>
-
-              <div className="divide-y divide-white/10">
-                {todayClasses.map((classItem) => (
-                  <div
-                    key={classItem.name}
-                    className="flex flex-wrap items-center justify-between gap-3 p-5"
-                  >
-                    <div>
-                      <p className="font-medium">{classItem.name}</p>
-                      <p className="text-sm text-gray-400">
-                        {classItem.subject}
-                      </p>
-                    </div>
-                    <span className="text-sm text-gray-300">
-                      {classItem.time}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <p className="mt-5 text-sm text-gray-400">
-              Attendance suggestions require teacher review before records are
-              finalized.
-            </p>
-          </>
+        {activePage === 'Login / Authentication' ? (
+          <Login />
+        ) : activePage === 'Dashboard' ? (
+          <Dashboard />
+        ) : activePage === 'Classes' ? (
+          <Classes />
+        ) : activePage === 'Students' ? (
+          <Students />
+        ) : activePage === 'Face Registration' ? (
+          <FaceRegistration />
+        ) : activePage === 'Live Capture' ? (
+          <LiveCapture />
+        ) : activePage === 'Attendance Review' ? (
+          <AttendanceReview />
+        ) : activePage === 'Attendance Records' ? (
+          <AttendanceRecords />
+        ) : activePage === 'Reports' ? (
+          <Reports />
+        ) : activePage === 'System Status' ? (
+          <SystemStatus />
+        ) : activePage === 'Settings' ? (
+          <Settings />
         ) : (
-          <section className="rounded-xl border border-white/10 bg-[#18181b] p-6">
-            <h2 className="font-semibold">{activePage}</h2>
-            <p className="mt-2 text-sm text-gray-400">
-              This screen is planned for the frontend. It is not connected to
-              live data yet.
-            </p>
-          </section>
+          <Profile />
         )}
       </main>
     </div>
