@@ -1,3 +1,5 @@
+import FeedbackState from '../components/ui/FeedbackState'
+
 const processingSteps = [
   'Face detection',
   'Face tracking',
@@ -47,17 +49,12 @@ export default function LiveCapture() {
             </select>
           </div>
 
-          <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-white/20 bg-[#0d0d0f] p-6 text-center">
-            <div>
-              <div className="mx-auto mb-4 grid size-16 place-items-center rounded-full border border-white/20 text-2xl text-gray-500">
-                ○
-              </div>
-              <p className="font-medium">Capture session is idle</p>
-              <p className="mt-2 max-w-sm text-sm text-gray-500">
-                The camera feed will appear here after an authorized camera
-                integration is connected.
-              </p>
-            </div>
+          <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-white/20 bg-[#0d0d0f] p-4">
+            <FeedbackState
+              kind="empty"
+              title="Capture session is idle"
+              message="The camera feed will appear here after an authorized camera integration is connected."
+            />
           </div>
 
           <button
