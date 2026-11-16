@@ -1,19 +1,79 @@
 import { useState } from 'react'
+import type { FormEvent } from 'react'
 
-const classRows = [
-  { name: 'CSE - A', department: 'CSE', year: 'II / III', subjects: 5, students: 62 },
-  { name: 'CSE - B', department: 'CSE', year: 'II / III', subjects: 5, students: 61 },
-  { name: 'CSE - F', department: 'CSE', year: 'II / III', subjects: 5, students: 62 },
+type ClassRow = {
+  name: string
+  department: string
+  year: string
+  subjects: string[]
+  students: number
+}
+
+const startingClasses: ClassRow[] = [
+  {
+    name: 'CSE - A',
+    department: 'CSE',
+    year: 'II / III',
+    subjects: ['AI', 'DBMS', 'OS', 'Maths', 'Networks'],
+    students: 62,
+  },
+  {
+    name: 'CSE - B',
+    department: 'CSE',
+    year: 'II / III',
+    subjects: ['AI', 'DBMS', 'OS', 'Maths', 'Networks'],
+    students: 61,
+  },
+  {
+    name: 'CSE - F',
+    department: 'CSE',
+    year: 'II / III',
+    subjects: ['AI', 'DBMS', 'OS', 'Maths', 'Networks'],
+    students: 62,
+  },
 ]
 
-export default function Classes() {
-  const [search, setSearch] = useState('')
+const inputClass =
+  'w-full rounded-lg border border-white/10 bg-[#0d0d0f] px-3 py-2 text-sm text-white outline-none focus:border-[#cd202c]'
 
-  const filteredClasses = classRows.filter((classItem) =>
-    `${classItem.name} ${classItem.department}`
+export default function Classes() {
+  const [classes, setClasses] = useState(startingClasses)
+  const [search, setSearch] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [form, setForm] = useState({
+    name: '',
+    department: '',
+    year: '',
+    subjects: '',
+    students: '',
+  })
+
+  const filteredClasses = classes.filter((classItem) =>
+    `${classItem.name} ${classItem.department} ${classItem.year} ${classItem.subjects.join(' ')}`
       .toLowerCase()
       .includes(search.toLowerCase()),
   )
+
+  function addClass(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const newClass: ClassRow = {
+      name: form.name.trim(),
+      department: form.department.trim(),
+      year: form.year.trim(),
+      subjects: form.subjects
+        .split(',')
+        .map((subject) => subject.trim())
+        .filter(Boolean),
+      students: Number(form.students) || 0,
+    }
+
+    setClasses((currentClasses) => [newClass, ...currentClasses])
+    setForm({ name: '', department: '', year: '', subjects: '', students: '' })
+    setShowForm(false)
+    setNotice('Class added in this preview only. It has not been saved.')
+  }
 
   return (
     <div className="space-y-6">
@@ -26,24 +86,36 @@ export default function Classes() {
           </p>
         </div>
         <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
-          Sample preview data
+          Preview only · not saved
         </span>
       </header>
 
-      <section className="rounded-xl border border-white/10 bg-[#18181b]">
+      <section className="overflow-hidden rounded-xl border border-white/10 bg-[#18181b]">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 p-5">
           <h3 className="font-semibold">Class list</h3>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search classes..."
-            aria-label="Search classes"
-            className="w-full rounded-lg border border-white/10 bg-[#0d0d0f] px-3 py-2 text-sm outline-none placeholder:text-gray-500 focus:border-[#cd202c] sm:w-64"
-          />
+          <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search classes..."
+              aria-label="Search classes"
+              className={`${inputClass} sm:w-64`}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setNotice('')
+                setShowForm(true)
+              }}
+              className="rounded-lg bg-[#cd202c] px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              + Add Class
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] text-left text-sm">
+          <table className="w-full min-w-[650px] text-left text-sm">
             <thead className="bg-white/5 text-gray-400">
               <tr>
                 <th className="px-5 py-3 font-medium">Class</th>
@@ -59,7 +131,7 @@ export default function Classes() {
                   <td className="px-5 py-4 font-medium">{classItem.name}</td>
                   <td className="px-5 py-4">{classItem.department}</td>
                   <td className="px-5 py-4">{classItem.year}</td>
-                  <td className="px-5 py-4">{classItem.subjects}</td>
+                  <td className="px-5 py-4">{classItem.subjects.length}</td>
                   <td className="px-5 py-4">{classItem.students}</td>
                 </tr>
               ))}
@@ -74,10 +146,123 @@ export default function Classes() {
           </table>
         </div>
 
+        {notice && (
+          <p role="status" className="border-t border-white/10 px-5 py-3 text-sm text-amber-200">
+            {notice}
+          </p>
+        )}
+
         <p className="border-t border-white/10 px-5 py-3 text-xs text-gray-500">
-          Preview only. Class data and management actions are not connected to the backend yet.
+          Example classes and any additions are held in this page preview only.
         </p>
       </section>
+
+      {showForm && (
+        <div className="fixed inset-0 z-10 grid place-items-center bg-black/70 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-class-title"
+            className="w-full max-w-lg rounded-xl border border-white/10 bg-[#18181b] p-6"
+          >
+            <h3 id="add-class-title" className="text-lg font-semibold">
+              Add a class
+            </h3>
+            <p className="mt-1 text-sm text-gray-400">
+              Preview form · information is not saved
+            </p>
+
+            <form onSubmit={addClass} className="mt-5 space-y-4">
+              <div>
+                <label htmlFor="class-name" className="mb-1 block text-sm text-gray-300">
+                  Class name
+                </label>
+                <input
+                  id="class-name"
+                  required
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  placeholder="e.g. CSE - D"
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="department" className="mb-1 block text-sm text-gray-300">
+                    Department
+                  </label>
+                  <input
+                    id="department"
+                    required
+                    value={form.department}
+                    onChange={(event) => setForm({ ...form, department: event.target.value })}
+                    placeholder="e.g. CSE"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="year" className="mb-1 block text-sm text-gray-300">
+                    Year / semester
+                  </label>
+                  <input
+                    id="year"
+                    required
+                    value={form.year}
+                    onChange={(event) => setForm({ ...form, year: event.target.value })}
+                    placeholder="e.g. II / III"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="subjects" className="mb-1 block text-sm text-gray-300">
+                  Subjects, separated by commas
+                </label>
+                <input
+                  id="subjects"
+                  value={form.subjects}
+                  onChange={(event) => setForm({ ...form, subjects: event.target.value })}
+                  placeholder="e.g. AI, DBMS, OS"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="students" className="mb-1 block text-sm text-gray-300">
+                  Student count
+                </label>
+                <input
+                  id="students"
+                  type="number"
+                  min="0"
+                  value={form.students}
+                  onChange={(event) => setForm({ ...form, students: event.target.value })}
+                  placeholder="e.g. 60"
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="rounded-lg border border-white/10 px-4 py-2 text-sm text-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-[#cd202c] px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Add to preview
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   )
 }
