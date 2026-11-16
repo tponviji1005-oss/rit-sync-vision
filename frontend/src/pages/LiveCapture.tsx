@@ -1,106 +1,109 @@
-import FeedbackState from '../components/ui/FeedbackState'
+import { useState } from 'react'
 
-const processingSteps = [
-  'Face detection',
-  'Face tracking',
-  'Identity matching',
-  'Candidate review',
-]
-
-const summaryItems = [
-  { label: 'Present candidates', value: '—', color: 'text-emerald-200' },
-  { label: 'Needs review', value: '—', color: 'text-amber-200' },
-  { label: 'Not observed', value: '—', color: 'text-gray-300' },
-]
+const steps = ['Face detection', 'Face tracking', 'Identity matching', 'Attendance review']
 
 export default function LiveCapture() {
+  const [previewActive, setPreviewActive] = useState(false)
+  const [className, setClassName] = useState('CSE - A')
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm text-gray-400">Attendance session</p>
-          <h2 className="mt-1 text-2xl font-semibold">Live Capture</h2>
-          <p className="mt-1 text-sm text-gray-400">
-            Monitor the session and processing status
-          </p>
-        </div>
-        <span className="rounded-full border border-gray-500/40 bg-white/5 px-3 py-1 text-xs text-gray-300">
-          Idle · preview only
-        </span>
+      <header>
+        <p className="text-sm text-gray-400">Classroom monitoring</p>
+        <h1 className="mt-1 text-3xl font-semibold">Live Capture & AI Processing</h1>
+        <p className="mt-2 text-gray-400">
+          Preview the capture session and processing status.
+        </p>
       </header>
 
-      <section className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
-        <div className="rounded-xl border border-white/10 bg-[#18181b] p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-semibold">Camera preview</h3>
-              <p className="mt-1 text-sm text-gray-400">
-                No camera is connected in this preview
-              </p>
-            </div>
-            <select
-              aria-label="Select class"
-              defaultValue="CSE - A"
-              className="rounded-lg border border-white/10 bg-[#0d0d0f] px-3 py-2 text-sm text-white"
-            >
-              <option>CSE - A</option>
-              <option>CSE - B</option>
-              <option>CSE - F</option>
-            </select>
-          </div>
-
-          <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-white/20 bg-[#0d0d0f] p-4">
-            <FeedbackState
-              kind="empty"
-              title="Capture session is idle"
-              message="The camera feed will appear here after an authorized camera integration is connected."
-            />
-          </div>
-
-          <button
-            type="button"
-            disabled
-            className="mt-4 w-full cursor-not-allowed rounded-lg bg-[#cd202c] px-4 py-3 text-sm font-semibold text-white opacity-50"
+      <section className="flex flex-wrap items-end gap-4 rounded-xl border border-white/10 bg-[#18181b] p-5">
+        <label className="block min-w-48 space-y-2">
+          <span className="text-sm text-gray-300">Class</span>
+          <select
+            value={className}
+            onChange={(event) => setClassName(event.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-[#0d0d0f] px-4 py-3 text-white"
           >
-            Start capture · integration pending
-          </button>
-        </div>
+            <option>CSE - A</option>
+            <option>CSE - B</option>
+            <option>CSE - F</option>
+          </select>
+        </label>
 
-        <div className="space-y-6">
-          <section className="rounded-xl border border-white/10 bg-[#18181b] p-5">
-            <h3 className="font-semibold">AI processing status</h3>
-            <p className="mt-1 text-sm text-gray-400">Waiting for a session</p>
+        <button
+          type="button"
+          onClick={() => setPreviewActive((active) => !active)}
+          className={`rounded-lg px-5 py-3 font-medium text-white ${
+            previewActive
+              ? 'border border-white/20 bg-white/10 hover:bg-white/20'
+              : 'bg-[#cd202c] hover:bg-red-700'
+          }`}
+        >
+          {previewActive ? 'Stop preview' : 'Start preview'}
+        </button>
 
-            <div className="mt-4 space-y-3">
-              {processingSteps.map((step) => (
-                <div
-                  key={step}
-                  className="flex items-center justify-between rounded-lg bg-[#0d0d0f] px-4 py-3"
-                >
-                  <span className="text-sm text-gray-300">{step}</span>
-                  <span className="text-xs text-gray-500">Waiting</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-white/10 bg-[#18181b] p-5">
-            <h3 className="font-semibold">Attendance candidates</h3>
-            <div className="mt-4 space-y-3">
-              {summaryItems.map((item) => (
-                <div key={item.label} className="flex justify-between text-sm">
-                  <span className="text-gray-400">{item.label}</span>
-                  <span className={`font-medium ${item.color}`}>{item.value}</span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 border-t border-white/10 pt-4 text-xs leading-5 text-gray-500">
-              AI can suggest candidates. A teacher must review and finalize
-              attendance.
-            </p>
-          </section>
-        </div>
+        <span className="text-sm text-gray-400">
+          {previewActive ? 'Preview session active' : 'Session not started'}
+        </span>
       </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+        <div className="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-white/20 bg-[#18181b] p-8 text-center">
+          <div className="grid size-16 place-items-center rounded-full bg-white/10 text-3xl">
+            ◉
+          </div>
+          <h2 className="mt-4 text-xl font-semibold">Camera preview unavailable</h2>
+          <p className="mt-2 max-w-lg text-sm text-gray-400">
+            Camera access and AI processing will be connected during system
+            integration. This preview does not use a camera or identify anyone.
+          </p>
+        </div>
+
+        <aside className="rounded-xl border border-white/10 bg-[#18181b] p-5">
+          <h2 className="text-lg font-semibold">Processing status</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            {previewActive ? 'Preview state' : 'Waiting to start'}
+          </p>
+
+          <ul className="mt-5 space-y-4">
+            {steps.map((step, index) => (
+              <li key={step} className="flex items-center justify-between gap-3">
+                <span className="text-sm text-gray-300">{step}</span>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs ${
+                    previewActive && index === 0
+                      ? 'bg-amber-400/10 text-amber-300'
+                      : 'bg-white/5 text-gray-400'
+                  }`}
+                >
+                  {previewActive && index === 0 ? 'Preview only' : 'Waiting'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </section>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          ['Faces detected', '—'],
+          ['Needs review', '—'],
+          ['Not observed', '—'],
+        ].map(([label, value]) => (
+          <div
+            key={label}
+            className="rounded-xl border border-white/10 bg-[#18181b] p-5"
+          >
+            <p className="text-sm text-gray-400">{label}</p>
+            <p className="mt-2 text-2xl font-semibold">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-sm text-gray-500">
+        Preview only. No camera, face data, attendance decisions, or backend
+        processing are used here.
+      </p>
     </div>
   )
 }

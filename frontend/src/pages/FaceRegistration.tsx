@@ -1,100 +1,101 @@
 import { useState } from 'react'
 
 export default function FaceRegistration() {
-  const [consentConfirmed, setConsentConfirmed] = useState(false)
+  const [studentId, setStudentId] = useState('')
+  const [className, setClassName] = useState('CSE - A')
+  const [message, setMessage] = useState('')
+
+  function handleRegister() {
+    if (!studentId.trim()) {
+      setMessage('Enter a demo student ID to continue.')
+      return
+    }
+
+    setMessage(
+      `Preview only: registration flow shown for ${studentId}. No camera or face data was used.`,
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm text-gray-400">Student enrollment</p>
-          <h2 className="mt-1 text-2xl font-semibold">Face Registration</h2>
-          <p className="mt-1 text-sm text-gray-400">
-            Register an authorized student template
-          </p>
-        </div>
-        <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
-          UI preview only
-        </span>
+      <header>
+        <p className="text-sm text-gray-400">Student enrollment</p>
+        <h1 className="mt-1 text-3xl font-semibold">Face Registration</h1>
+        <p className="mt-2 text-gray-400">
+          Preview the registration steps for a student.
+        </p>
       </header>
 
-      <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <div className="space-y-5 rounded-xl border border-white/10 bg-[#18181b] p-5">
-          <div>
-            <label htmlFor="student" className="mb-2 block text-sm text-gray-300">
-              Select student
-            </label>
-            <select
-              id="student"
-              className="w-full rounded-lg border border-white/10 bg-[#0d0d0f] px-3 py-3 text-sm text-white outline-none focus:border-[#cd202c]"
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Choose a demo student
-              </option>
-              <option value="STU-001">STU-001 · Demo Student 001 · CSE - A</option>
-              <option value="STU-002">STU-002 · Demo Student 002 · CSE - B</option>
-              <option value="STU-003">STU-003 · Demo Student 003 · CSE - F</option>
-            </select>
-          </div>
-
-          <div className="rounded-lg border border-white/10 bg-[#0d0d0f] p-4">
-            <h3 className="font-medium">Before registration</h3>
-            <ul className="mt-3 space-y-2 text-sm text-gray-400">
-              <li>• Confirm the student is authorized for registration.</li>
-              <li>• Ask the student to face the camera in good lighting.</li>
-              <li>• Check the capture result before submitting.</li>
-            </ul>
-          </div>
-
-          <label className="flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm text-gray-300">
+      <section className="grid max-w-5xl gap-6 rounded-xl border border-white/10 bg-[#18181b] p-6 md:grid-cols-2">
+        <div className="space-y-5">
+          <label className="block space-y-2">
+            <span className="text-sm text-gray-300">Student ID</span>
             <input
-              type="checkbox"
-              checked={consentConfirmed}
-              onChange={(event) => setConsentConfirmed(event.target.checked)}
-              className="mt-1 accent-[#cd202c]"
+              value={studentId}
+              onChange={(event) => {
+                setStudentId(event.target.value)
+                setMessage('')
+              }}
+              placeholder="Example: STU-001"
+              className="w-full rounded-lg border border-white/10 bg-[#0d0d0f] px-4 py-3 text-white placeholder:text-gray-600"
             />
-            <span>
-              I confirm the required authorization and consent have been
-              obtained.
-            </span>
           </label>
-        </div>
 
-        <div className="rounded-xl border border-white/10 bg-[#18181b] p-5">
-          <div className="mb-4">
-            <h3 className="font-semibold">Capture preview</h3>
-            <p className="mt-1 text-sm text-gray-400">
-              Camera connection will be added after the approved integration is ready.
-            </p>
-          </div>
+          <label className="block space-y-2">
+            <span className="text-sm text-gray-300">Class</span>
+            <select
+              value={className}
+              onChange={(event) => setClassName(event.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-[#0d0d0f] px-4 py-3 text-white"
+            >
+              <option>CSE - A</option>
+              <option>CSE - B</option>
+              <option>CSE - F</option>
+            </select>
+          </label>
 
-          <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-white/20 bg-[#0d0d0f] p-6 text-center">
-            <div>
-              <div className="mx-auto mb-4 grid size-16 place-items-center rounded-full border border-white/20 text-2xl text-gray-400">
-                ○
-              </div>
-              <p className="font-medium">Camera not connected</p>
-              <p className="mt-2 max-w-sm text-sm text-gray-500">
-                This preview does not request camera permission or capture an image.
-              </p>
-            </div>
+          <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+            <h2 className="font-medium">Registration steps</h2>
+            <ol className="mt-3 space-y-2 text-sm text-gray-300">
+              <li>1. Confirm the student and class.</li>
+              <li>2. The authorized system captures a face template.</li>
+              <li>3. Review the result before saving.</li>
+            </ol>
           </div>
 
           <button
             type="button"
-            disabled={!consentConfirmed}
-            className="mt-4 w-full rounded-lg bg-[#cd202c] px-4 py-3 text-sm font-semibold text-white opacity-50"
+            onClick={handleRegister}
+            className="w-full rounded-lg bg-[#cd202c] px-4 py-3 font-medium text-white hover:bg-red-700"
           >
-            Capture &amp; Register — integration pending
+            Preview registration
           </button>
+        </div>
 
-          <p className="mt-3 text-xs leading-5 text-gray-500">
-            Face images and templates are not stored by this preview. Registration
-            requires the agreed backend and AI integration.
+        <div className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-white/20 bg-[#0d0d0f] p-6 text-center">
+          <div className="grid size-16 place-items-center rounded-full bg-white/10 text-2xl">
+            ◉
+          </div>
+          <h2 className="mt-4 text-lg font-semibold">Camera preview unavailable</h2>
+          <p className="mt-2 max-w-sm text-sm text-gray-400">
+            Camera capture will be connected during system integration. This
+            screen does not access a camera or collect biometric data.
           </p>
         </div>
+
+        {message && (
+          <p
+            className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-gray-300 md:col-span-2"
+            role="status"
+          >
+            {message}
+          </p>
+        )}
       </section>
+
+      <p className="text-sm text-gray-500">
+        Preview only. Registration is not connected to the backend.
+      </p>
     </div>
   )
 }
