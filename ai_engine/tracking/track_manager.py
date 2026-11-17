@@ -4,14 +4,15 @@ Author: Paul Bryton Raj (AI & System Lead)
 
 Consolidates multi-frame evidence per tracklet:
 - Tracks valid observations, quality distribution, and embeddings across frames.
-- Computes mean/best embedding representation for recognition.
-- Manages track lifecycle and privacy disposal of intermediate crops.
+- Records the frame span of each track (used to tell track fragmentation from real conflicts).
+- Computes the mean embedding representation for recognition.
+- Holds no raw images; all evidence is disposed of at session end.
 """
 
 from typing import Dict, List, Optional
 import numpy as np
-from shared.schemas import BoundingBox, FaceQualityResult, Observation
-from shared.constants import MatchState, ReasonCode
+from shared.schemas import BoundingBox, FaceQualityResult
+from shared.constants import ReasonCode
 
 
 class TrackEvidence:
@@ -25,16 +26,25 @@ class TrackEvidence:
         self.quality_scores: List[float] = []
         self.accumulated_reasons: List[ReasonCode] = []
         self.last_bbox: Optional[BoundingBox] = None
+        self.first_frame: Optional[int] = None
+        self.last_frame: Optional[int] = None
 
     def add_observation(
         self,
         quality: FaceQualityResult,
         embedding: Optional[List[float]],
         bbox: BoundingBox,
+        frame_index: Optional[int] = None,
     ):
         self.observations_count += 1
         self.quality_scores.append(quality.quality_score)
         self.last_bbox = bbox
+
+        if frame_index is not None:
+            if self.first_frame is None or frame_index < self.first_frame:
+                self.first_frame = frame_index
+            if self.last_frame is None or frame_index > self.last_frame:
+                self.last_frame = frame_index
 
         if quality.is_usable and embedding is not None:
             self.usable_observations_count += 1
@@ -44,10 +54,17 @@ class TrackEvidence:
                 if r not in self.accumulated_reasons:
                     self.accumulated_reasons.append(r)
 
+    def overlaps(self, other: "TrackEvidence") -> bool:
+        """True if both tracks were visible in at least one common frame range.
+        Tracks without frame information are conservatively treated as overlapping."""
+        if None in (self.first_frame, self.last_frame, other.first_frame, other.last_frame):
+            return True
+        return self.first_frame <= other.last_frame and other.first_frame <= self.last_frame
+
     def get_representative_embedding(self) -> Optional[List[float]]:
         """
         Computes the L2-normalized mean embedding across all usable frames for this track.
-        Multi-frame averaging cancels out random noise/pose variance!
+        Multi-frame averaging reduces per-frame noise and pose variance.
         """
         if not self.embeddings:
             return None
@@ -79,9 +96,10 @@ class TrackManager:
         quality: FaceQualityResult,
         embedding: Optional[List[float]],
         bbox: BoundingBox,
+        frame_index: Optional[int] = None,
     ):
         evidence = self.get_or_create(track_id)
-        evidence.add_observation(quality=quality, embedding=embedding, bbox=bbox)
+        evidence.add_observation(quality=quality, embedding=embedding, bbox=bbox, frame_index=frame_index)
 
     def get_all_tracks(self) -> List[TrackEvidence]:
         return list(self.tracks.values())

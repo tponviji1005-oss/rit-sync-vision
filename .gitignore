@@ -69,3 +69,11 @@ ai_engine/models/*.bin
 ai_engine/models/*.weights
 ai_engine/models/*.xml
 !ai_engine/models/.gitkeep
+
+# Large model weights fetched by scripts/download_models.py
+ai_engine/models/face_recognition_sface_2021dec.onnx
+ai_engine/models/*.part
+
+# Local evaluation data (consented, never committed)
+evaluation_data/
+reports/evaluation/

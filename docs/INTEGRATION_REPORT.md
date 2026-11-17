@@ -1,47 +1,82 @@
-# RIT-Sync Vision — Phase 1 AI Integration & Evaluation Report
+# RIT-Sync Vision: Phase 1 AI Integration Report
 
-**Author:** Paul Bryton Raj (AI & System Lead)  
-**Status:** Completed Phase 1 Software Milestone  
-**Date:** 2026-11-17  
-
----
-
-## 1. Executive Summary
-
-All core deliverables assigned to Paul Bryton Raj under **Phase 1 (Software)** of `plan.md` and the 10 execution priorities have been successfully designed, implemented, tested, and integrated.
+**Author:** Paul Bryton Raj (AI & System Lead)
+**Status:** AI engine feature-complete for software Phase 1. Evaluation and full-system integration are still pending.
+**Date:** 2026-11-18
 
 ---
 
-## 2. Deliverables & Implementation Verification
+## 1. Summary
 
-| Priority | Deliverable | Milestone Status | Test Suite & Validation |
-|---|---|---|---|
-| **1** | Architecture & Contracts | **COMPLETE** | `shared/constants/`, `shared/schemas/`, `docs/SYSTEM_ARCHITECTURE.md`, `docs/AI_WORKFLOW.md` |
-| **2** | Camera Input Adapter | **COMPLETE** | `ai_engine/camera_input.py`, `ai_engine/tests/test_camera_input.py` |
-| **3** | Face Detection + Quality Gate | **COMPLETE** | `ai_engine/detection/`, `ai_engine/quality_check/`, `ai_engine/tests/test_detection_and_quality.py` |
-| **4** | Face Registration & Templates | **COMPLETE** | `ai_engine/recognition/face_encoder.py`, `ai_engine/privacy/template_protection.py`, `ai_engine/tests/test_registration_and_templates.py` |
-| **5** | Recognition + UNKNOWN Gate | **COMPLETE** | `ai_engine/recognition/unknown_detector.py`, `ai_engine/tests/test_recognition_unknown.py` |
-| **6** | Multi-Frame Tracking | **COMPLETE** | `ai_engine/tracking/face_tracker.py`, `ai_engine/tracking/track_manager.py`, `ai_engine/tests/test_tracking.py` |
-| **7** | Attendance Decision Engine | **COMPLETE** | `ai_engine/decision_engine/`, `ai_engine/tests/test_attendance_decision.py` |
-| **8** | Backend Integration | **COMPLETE** | `ai_engine/pipeline.py`, `backend/app/modules/ai_processing/`, `backend/tests/test_ai_backend_integration.py` |
-| **9** | Evaluation & Privacy Controls | **COMPLETE** | `ai_engine/privacy/frame_handler.py`, `ai_engine/tests/test_privacy_frame_handler.py`, `docs/AI_MODEL_EVALUATION.md` |
-| **10** | Complete End-to-End Pipeline | **COMPLETE** | `scripts/demo_ai_pipeline.py` |
+The AI engine implements the full observation pipeline from `ai_engine/plan.md`:
 
----
+authorization guard → camera → detection → quality gate → tracking → open-set recognition → reconciliation → candidates.
 
-## 3. Measured Performance & Verification Results
+The 2026-11-17 version of this report marked every item COMPLETE. A review against the plan then found:
 
-- **Frame Processing Speed:** ~50–65 ms per frame on standard CPU (exceeds real-time 15 FPS requirement).
-- **Face Quality Gate:** Correctly flags `IMAGE_BLUR`, `POOR_LIGHTING`, `FACE_TOO_SMALL`, and `FACE_OCCLUDED`.
-- **Open-Set Identification:** Unenrolled individuals reliably produce `UNKNOWN` (Zero forced false identity).
-- **Margin Check:** Ambiguous close matches ($|\text{sim}_1 - \text{sim}_2| < 0.10$) route to `NEEDS_REVIEW` with `AMBIGUOUS_MATCH`.
-- **Core Non-Negotiable Rule:** Unobserved roster students are marked `NOT_OBSERVED` with 0 evidence. The system **never** marks students `ABSENT` automatically.
-- **Privacy Audit:** 0 raw classroom frames or video streams saved to disk.
+- A crash: any face track with zero usable frames made the whole session `FAILED`.
+- A placeholder recognition encoder.
+- A missing detector fallback.
+- Camera faults reported as success.
+- No permit checks.
 
----
+These have been fixed (see §3). Measured recognition accuracy is still outstanding.
 
-## 4. Known Limitations & Phase 2 Preparation
+## 2. Deliverable status (plan §7)
 
-1. **Development Camera Source:** A laptop webcam or synthetic generator is used for Phase 1 software validation. Real classroom seat-zone coverage must be physically measured with Phase 2 dedicated hardware optics.
-2. **Presentation Attack Detection (PAD):** While basic blur, lighting, and temporal multi-frame consistency filters are implemented, dedicated hardware liveness/anti-spoofing (IR / depth sensing) belongs to Phase 2.
-3. **Teacher Authority:** All AI candidate proposals remain provisional until explicitly finalized by the teacher via the review interface.
+| Deliverable | Status | Evidence |
+|---|---|---|
+| System architecture documentation | Done | `docs/SYSTEM_ARCHITECTURE.md`, `docs/AI_WORKFLOW.md` |
+| Camera input module | Done | `ai_engine/camera_input.py`: webcam/video/synthetic, faults, teacher stop |
+| Multiple face detection | Done | YuNet, with Haar/LBP fallback |
+| Face quality assessment | Done | `detection/face_quality.py`, `quality_check/*` |
+| Face recognition | Done, needs model download | SFace when installed; `gradient_v1` dev fallback |
+| Open-set UNKNOWN detection | Done | threshold + margin + model-version check |
+| Multi-frame tracking | Done | IoU tracklets, frame spans, identity-switch check |
+| Attendance decision engine | Done | NOT_OBSERVED ≠ ABSENT, enforced by tests |
+| Duplicate candidate prevention | Done | merges fragmented tracks; flags simultaneous ones as conflicts |
+| Structured AI result interface | Done | `AIProcessingResult` now carries `fault_reasons`, `model_version`, `config` |
+| Backend-AI integration | Partial | `/api/v1/ai/health`, `/process-session`. Enrollment, progress and stop are not yet exposed over HTTP (needs backend coordination) |
+| AI privacy implementation | Done for AI side | frame release, no crop retention, log/storage audit, template key guard |
+| Model selection & evaluation report | Partial | `docs/AI_MODEL_EVALUATION.md`; accuracy not measured |
+| Detection / recognition / tracking test results | Partial | 47 automated tests; no real-data metrics yet |
+| Performance evaluation report | Partial | timing measured with dev encoder only |
+| Integration testing report | Partial | backend adapter tested; frontend and DB integration not started |
+| Webcam demonstration | Ready to run | `python scripts/demo_ai_pipeline.py --source 0 --enroll me.jpg --name "..."` |
+| Phase 2 hardware preparation | Done (doc) | `docs/HARDWARE_READINESS.md` |
+
+## 3. Fixes made in the 2026-11-18 review
+
+1. `Observation.evidence_count` now allows 0, and observations report `total_observations`. A regression test reproduces the old crash.
+2. The SFace recognizer is integrated, with landmark alignment. Weights come from `scripts/download_models.py`. Templates carry `model_version`, and mismatched ones are never compared.
+3. Detector fallback: Haar on OpenCV 4.x, scikit-image LBP on OpenCV 5. Health reports which detector is active.
+4. A camera disconnect or unreadable frame now ends in `FAILED` + `CAMERA_DISCONNECTED`, with every present candidate downgraded to `NEEDS_REVIEW`. Reaching the end of a recorded video counts as normal completion.
+5. A teacher stop (`camera_adapter.request_stop()`) ends in `STOPPED` + `CAPTURE_STOPPED_BY_TEACHER`.
+6. `SessionGuard`: a missing, invalid or expired permit means the camera is never opened. There is a hook for a backend permit verifier. The capture window is limited to 30–120 s.
+7. Health checks are real: detector, encoder, storage writability and clock plausibility.
+8. Tracks that never overlap in time are merged as one person. Only simultaneous tracks are flagged `CONFLICTING_IDENTITY`. An identity switch inside one track is also flagged.
+9. Privacy:
+   - The tracker no longer keeps face crops.
+   - Frames are released after each frame.
+   - Errors log only the exception type.
+   - The dev template key raises an error outside development.
+   - `PrivacyAuditor` scans `logs/` and detects embedding or image dumps in log files.
+10. A progress callback reports state transitions and counts for a live status view.
+11. Added `ai_engine/enrollment.py` (image → template), `scripts/evaluate_ai.py` and `ai_engine/requirements.txt`.
+
+## 4. Contract changes to coordinate (shared/)
+
+The following changes affect Vijayalakshmi's backend and Rakesh's frontend:
+
+- `Observation.evidence_count` `ge=0`, plus a new `total_observations`.
+- `SessionContext.duration_seconds` now 30–120 (was 1–120), plus a new optional `permit_expires_at`.
+- `AIProcessingResult` gains `fault_reasons`, `model_version` and `config`. `status` can now be `STOPPED`.
+- New reason codes: `PERMIT_INVALID`, `MODEL_UNAVAILABLE`, `MODEL_VERSION_MISMATCH`, `CAPTURE_STOPPED_BY_TEACHER`.
+
+## 5. Pending work
+
+1. Download SFace, run `scripts/evaluate_ai.py` on a consented dataset, and calibrate the threshold. Update `AI_MODEL_EVALUATION.md` with the measured values.
+2. Backend: an enrollment endpoint using `FaceEnroller` plus encrypted storage, a permit verifier, background session execution with progress and a stop endpoint.
+3. Frontend: display the states and reason codes defined in `shared/constants`.
+4. Live webcam demonstration with the team, and an end-to-end test through the teacher review and finalization flow.
+5. A PAD test by attack type (photo, screen replay), per `HARDWARE_READINESS.md` §4.

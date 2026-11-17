@@ -13,10 +13,13 @@ import json
 import hashlib
 import base64
 import os
+import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from shared.schemas import EnrolledTemplate
+
+logger = logging.getLogger("rit_sync_vision.template_protection")
 
 
 class TemplateProtectionManager:
@@ -28,14 +31,25 @@ class TemplateProtectionManager:
         """
         :param master_key: 32-byte AES key. If None, derived from environment or secure random.
         """
+        self.using_dev_key = False
         if master_key is None:
             env_key = os.getenv("TEMPLATE_ENCRYPTION_KEY")
             if env_key:
                 self.key = hashlib.sha256(env_key.encode()).digest()
             else:
-                # Default development fallback key (must be overridden in production)
+                if os.getenv("RIT_ENV", "development").lower() not in ("development", "dev", "test"):
+                    raise RuntimeError(
+                        "TEMPLATE_ENCRYPTION_KEY must be set outside development (RIT_ENV)."
+                    )
+                # Development-only fallback key: publicly known, provides no real protection.
+                logger.warning(
+                    "Using the public development template key. Set TEMPLATE_ENCRYPTION_KEY for any real data."
+                )
                 self.key = hashlib.sha256(b"rit-sync-vision-dev-template-key").digest()
+                self.using_dev_key = True
         else:
+            if len(master_key) != 32:
+                raise ValueError("master_key must be 32 bytes (AES-256).")
             self.key = master_key
 
         self.aesgcm = AESGCM(self.key)
@@ -76,8 +90,8 @@ class TemplateProtectionManager:
         data = json.loads(decrypted_bytes.decode("utf-8"))
         return EnrolledTemplate(**data)
 
+    @staticmethod
     def create_template(
-        self,
         student_id: str,
         student_name: str,
         embedding: List[float],

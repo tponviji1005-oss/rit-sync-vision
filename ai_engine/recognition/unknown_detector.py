@@ -56,9 +56,11 @@ class UnknownDetector:
         self,
         query_embedding: Optional[List[float]],
         enrolled_templates: List[EnrolledTemplate],
+        model_version: Optional[str] = None,
     ) -> RecognitionResult:
         """
         Runs open-set identification against enrolled templates.
+        :param model_version: Encoder model version of the query; templates from other models are ignored.
         """
         if not query_embedding:
             return RecognitionResult(
@@ -78,8 +80,20 @@ class UnknownDetector:
                 reason_codes=[ReasonCode.UNENROLLED_INDIVIDUAL],
             )
 
+        if model_version is not None and not any(
+            t.model_version == model_version for t in enrolled_templates
+        ):
+            # Templates exist but were created by a different model: cannot compare safely.
+            return RecognitionResult(
+                match_state=MatchState.NEEDS_REVIEW,
+                student_id=None,
+                student_name=None,
+                confidence=0.0,
+                reason_codes=[ReasonCode.MODEL_VERSION_MISMATCH],
+            )
+
         top_matches: List[MatchCandidate] = self.matcher.find_top_matches(
-            query_embedding, enrolled_templates, top_k=2
+            query_embedding, enrolled_templates, top_k=2, model_version=model_version
         )
 
         if not top_matches:

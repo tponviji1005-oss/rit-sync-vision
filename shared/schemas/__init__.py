@@ -39,7 +39,10 @@ class Observation(BaseModel):
     match_state: MatchState = Field(..., description="MATCHED | UNKNOWN | INSUFFICIENT_QUALITY | NEEDS_REVIEW")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Recognition confidence")
     reason_codes: List[ReasonCode] = Field(default_factory=list, description="Reason codes for decision")
-    evidence_count: int = Field(default=1, ge=1, description="Number of supporting frame observations")
+    evidence_count: int = Field(
+        default=0, ge=0, description="Number of usable frame observations (0 when no frame passed the quality gate)"
+    )
+    total_observations: int = Field(default=0, ge=0, description="Total frames in which this track was seen")
     bbox: Optional[BoundingBox] = None
 
 
@@ -75,7 +78,10 @@ class SessionContext(BaseModel):
     subject_id: str = Field(..., description="Subject code (e.g. CS301)")
     teacher_id: str = Field(..., description="Authorized teacher user ID")
     permit_id: str = Field(..., description="Cryptographic capture permit ID")
-    duration_seconds: int = Field(default=30, ge=1, le=120, description="Bounded capture window duration")
+    duration_seconds: int = Field(default=30, ge=30, le=120, description="Bounded capture window duration (30-120 s)")
+    permit_expires_at: Optional[str] = Field(
+        None, description="ISO 8601 expiry of the capture permit; capture is refused after this time"
+    )
 
 
 class AIProcessingResult(BaseModel):
@@ -89,6 +95,11 @@ class AIProcessingResult(BaseModel):
     )
     processing_time_ms: float = Field(..., description="Processing time in milliseconds")
     status: SessionState = Field(SessionState.COMPLETED, description="Status of the AI pipeline run")
+    fault_reasons: List[ReasonCode] = Field(
+        default_factory=list, description="Session-level faults (e.g. CAMERA_DISCONNECTED, PERMIT_EXPIRED)"
+    )
+    model_version: str = Field("unknown", description="Detector/encoder model identifiers used for this run")
+    config: Dict[str, Any] = Field(default_factory=dict, description="Thresholds/config used, for traceability")
 
 
 class DeviceHealthStatus(BaseModel):

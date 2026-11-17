@@ -30,7 +30,7 @@ class TestBackendAIIntegration(unittest.TestCase):
             subject_id="CS301",
             teacher_id="TCH_01",
             permit_id="PERMIT_ABC_123",
-            duration_seconds=1,
+            duration_seconds=30,
         )
         req = ProcessSessionRequest(
             session_context=ctx,

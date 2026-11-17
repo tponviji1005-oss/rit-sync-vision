@@ -35,6 +35,8 @@ def calculate_iou(boxA: BoundingBox, boxB: BoundingBox) -> float:
 
 
 class ActiveTrack:
+    """Tracker state for one visible face. Holds geometry and quality only - never raw face pixels."""
+
     def __init__(self, track_id: str, initial_bbox: BoundingBox, start_frame: int):
         self.track_id = track_id
         self.last_bbox = initial_bbox
@@ -42,7 +44,6 @@ class ActiveTrack:
         self.last_frame = start_frame
         self.total_observations = 1
         self.missed_frames = 0
-        self.face_crops: List[np.ndarray] = []
         self.qualities: List[FaceQualityResult] = []
 
 
@@ -101,7 +102,6 @@ class FaceTracker:
                 track.last_frame = frame_index
                 track.total_observations += 1
                 track.missed_frames = 0
-                track.face_crops.append(det.face_crop)
                 track.qualities.append(det.quality)
 
                 matched_track_ids.add(tid)
@@ -130,7 +130,6 @@ class FaceTracker:
             det = detections[c]
             new_tid = self._generate_track_id()
             track = ActiveTrack(track_id=new_tid, initial_bbox=det.bbox, start_frame=frame_index)
-            track.face_crops.append(det.face_crop)
             track.qualities.append(det.quality)
             self.active_tracks[new_tid] = track
             matched_results.append((new_tid, det))

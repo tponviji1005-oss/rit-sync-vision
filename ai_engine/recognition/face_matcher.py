@@ -28,13 +28,18 @@ class FaceMatcher:
         query_embedding: List[float],
         enrolled_templates: List[EnrolledTemplate],
         top_k: int = 2,
+        model_version: Optional[str] = None,
     ) -> List[MatchCandidate]:
         """
         :param query_embedding: 128-d L2 normalized vector
         :param enrolled_templates: List of enrolled templates for the class
         :param top_k: Number of highest matches to return
+        :param model_version: If given, only templates created by the same model are compared
+                              (embeddings from different models are not comparable)
         :return: List of MatchCandidate sorted descending by similarity
         """
+        if model_version is not None:
+            enrolled_templates = [t for t in enrolled_templates if t.model_version == model_version]
         if not enrolled_templates or not query_embedding:
             return []
 
@@ -48,6 +53,8 @@ class FaceMatcher:
 
         for template in enrolled_templates:
             t_vec = np.array(template.embedding, dtype=np.float32)
+            if t_vec.shape != q_vec.shape:
+                continue
             t_norm = np.linalg.norm(t_vec)
             if t_norm == 0:
                 continue
