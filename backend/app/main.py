@@ -24,8 +24,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+<<<<<<< HEAD
+# Mount Routers
+app.include_router(ai_router)
+
+=======
 # Mount versioned API router (/api/v1)
 app.include_router(api_router, prefix="/api/v1")
+>>>>>>> 058be03daaa9f568b131b671fdf2c9402e81b7fd
 
 
 # Preserved root health check for backwards compatibility
