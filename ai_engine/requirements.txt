@@ -1,0 +1,10 @@
+# RIT-Sync Vision - AI engine runtime dependencies
+# (root requirements.txt includes these for the whole monolith)
+numpy>=1.26.0
+opencv-python-headless>=4.9.0   # YuNet detector + SFace recognizer (cv2.FaceDetectorYN / FaceRecognizerSF)
+pydantic>=2.6.0                 # shared/schemas contracts
+cryptography>=42.0.0            # AES-GCM template protection
+
+# Development / demo only
+scikit-image>=0.22.0            # sample image used by scripts/demo_ai_pipeline.py
+pytest>=8.0.0
