@@ -4,6 +4,7 @@ RIT Sync Vision - Backend Application Entry Point
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from backend.app.modules.ai_processing.router import router as ai_router
 
 app = FastAPI(
     title="RIT Sync Vision API",
@@ -19,6 +20,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Routers
+app.include_router(ai_router)
 
 
 @app.get("/health", tags=["Health"])

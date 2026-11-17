@@ -67,4 +67,5 @@ ai_engine/models/*.onnx
 ai_engine/models/*.pt
 ai_engine/models/*.bin
 ai_engine/models/*.weights
+ai_engine/models/*.xml
 !ai_engine/models/.gitkeep
