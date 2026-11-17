@@ -14,6 +14,15 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 from backend.app.core.config import Settings
 from backend.app.database.session import get_db
 from backend.app.main import app
+from backend.app.modules.attendance.models import AttendanceRecord
+from backend.app.modules.attendance.schemas import (
+    AttendanceRecordResponse,
+    AttendanceRecordUpdate,
+    FinalizeAttendancePayload,
+    ManualAttendanceCreate,
+    ObservationSubmission,
+    SessionAttendanceSummaryResponse,
+)
 from backend.app.modules.authentication.dependencies import get_current_user, require_admin
 from backend.app.modules.authentication.schemas import LoginRequest
 from backend.app.modules.classrooms.models import Classroom
@@ -38,13 +47,25 @@ from backend.app.modules.subjects.schemas import (
     SubjectResponse,
     SubjectUpdate,
 )
+from backend.app.modules.synchronization.models import SyncEvent
+from backend.app.modules.synchronization.schemas import (
+    SyncBatchRequest,
+    SyncBatchResponse,
+    SyncEventResponse,
+)
 from backend.app.modules.users.models import User
 from backend.app.modules.users.schemas import UserCreate, UserResponse
 
 
 def _to_dict(obj: Any) -> Any:
+    if isinstance(obj, list):
+        return [_to_dict(item) for item in obj]
     if hasattr(obj, "model_dump"):
         return obj.model_dump()
+    if isinstance(obj, SyncEvent) or (hasattr(obj, "event_id") and hasattr(obj, "sync_status")):
+        return SyncEventResponse.model_validate(obj).model_dump()
+    if isinstance(obj, AttendanceRecord) or (hasattr(obj, "student_institutional_id") and hasattr(obj, "is_finalized")):
+        return AttendanceRecordResponse.model_validate(obj).model_dump()
     if isinstance(obj, CaptureSession) or (hasattr(obj, "session_id") and hasattr(obj, "classroom_id") and hasattr(obj, "teacher_id")):
         return SessionResponse.model_validate(obj).model_dump()
     if isinstance(obj, CapturePermit) or (hasattr(obj, "permit_id") and hasattr(obj, "permit_token")):
@@ -172,6 +193,32 @@ class SimpleTestClient:
                 res = get_permit(session_id=session_id, db=db, current_user=user)
                 return _Response(200, _to_dict(res))
 
+            if path == "/api/v1/attendance/ai-status":
+                from backend.app.modules.attendance.router import get_ai_status
+                res = get_ai_status()
+                return _Response(200, res)
+
+            if path.startswith("/api/v1/attendance/sessions/"):
+                session_id = path.rstrip("/").split("/")[-1]
+                from backend.app.modules.attendance.router import get_session_attendance
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_session_attendance(session_id=session_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/attendance/records/"):
+                record_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.attendance.router import get_record
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_record(record_id=record_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/attendance/students/"):
+                student_id = path.rstrip("/").split("/")[-1]
+                from backend.app.modules.attendance.router import get_student_history
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_student_history(student_id=student_id, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
             if path.startswith("/api/v1/sessions/"):
                 session_id = path.rstrip("/").split("/")[-1]
                 from backend.app.modules.sessions.router import get_session
@@ -179,9 +226,33 @@ class SimpleTestClient:
                 res = get_session(session_id=session_id, db=db, current_user=user)
                 return _Response(200, _to_dict(res))
 
+            if path == "/api/v1/sync/status":
+                from backend.app.modules.synchronization.router import get_sync_status
+                res = get_sync_status()
+                return _Response(200, res)
+
+            if path.startswith("/api/v1/sync/events/"):
+                event_id = path.rstrip("/").split("/")[-1]
+                from backend.app.modules.synchronization.router import get_sync_event
+                user = get_current_user(authorization=auth_header, db=db)
+                res = get_sync_event(event_id=event_id, current_user=user, db=db)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/sync/sessions/") and path.endswith("/events"):
+                parts = path.strip("/").split("/")
+                session_id = parts[-2]
+                from backend.app.modules.synchronization.router import list_session_sync_events
+                user = get_current_user(authorization=auth_header, db=db)
+                res = list_session_sync_events(session_id=session_id, current_user=user, db=db)
+                return _Response(200, [_to_dict(e) for e in res])
+
             raise ValueError(f"Route {path} not found")
         except HTTPException as e:
             return _Response(e.status_code, {"detail": e.detail})
+        except Exception as e:
+            if "ValidationError" in type(e).__name__:
+                return _Response(422, {"detail": str(e)})
+            raise
         finally:
             gen.close()
 
@@ -254,6 +325,57 @@ class SimpleTestClient:
                 res = cancel_session(session_id=session_id, db=db, current_user=user)
                 return _Response(200, _to_dict(res))
 
+            if (path.startswith("/api/v1/attendance/sessions/") and (path.endswith("/proposals") or path.endswith("/observations"))) or path == "/api/v1/attendance/observations":
+                from backend.app.modules.attendance.router import submit_ai_proposals, ingest_ai_observations
+                permit_token = headers.get("X-Permit-Token")
+                user = None
+                if not auth_header and not permit_token:
+                    raise HTTPException(status_code=401, detail="Authentication credentials or valid capture permit required")
+
+                if auth_header and not permit_token:
+                    t = auth_header.split(" ", 1)[1].strip() if " " in auth_header else auth_header
+                    try:
+                        from backend.app.core.security import decode_access_token
+                        p = decode_access_token(t)
+                        if p.get("type") == "capture_permit" or str(p.get("sub", "")).startswith("permit:"):
+                            permit_token = t
+                        else:
+                            user = get_current_user(authorization=auth_header, db=db)
+                    except Exception:
+                        permit_token = t
+
+                payload = ObservationSubmission(**json_data)
+                if path == "/api/v1/attendance/observations":
+                    res = ingest_ai_observations(payload=payload, auth=(user, permit_token), db=db)
+                else:
+                    parts = path.strip("/").split("/")
+                    session_id = parts[-2]
+                    res = submit_ai_proposals(
+                        session_id=session_id,
+                        payload=payload,
+                        auth=(user, permit_token),
+                        db=db,
+                    )
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/attendance/sessions/") and path.endswith("/finalize"):
+                parts = path.strip("/").split("/")
+                session_id = parts[-2]
+                from backend.app.modules.attendance.router import finalize_attendance
+                user = get_current_user(authorization=auth_header, db=db)
+                payload = FinalizeAttendancePayload(**json_data)
+                res = finalize_attendance(session_id=session_id, payload=payload, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
+            if path.startswith("/api/v1/attendance/sessions/") and path.endswith("/manual"):
+                parts = path.strip("/").split("/")
+                session_id = parts[-2]
+                from backend.app.modules.attendance.router import create_manual_record
+                user = get_current_user(authorization=auth_header, db=db)
+                manual_in = ManualAttendanceCreate(**json_data)
+                res = create_manual_record(session_id=session_id, manual_in=manual_in, db=db, current_user=user)
+                return _Response(201, _to_dict(res))
+
             if path == "/api/v1/sessions/" or path == "/api/v1/sessions":
                 from backend.app.modules.sessions.router import create_session
                 user = get_current_user(authorization=auth_header, db=db)
@@ -261,9 +383,20 @@ class SimpleTestClient:
                 res = create_session(session_in=session_in, db=db, current_user=user)
                 return _Response(201, _to_dict(res))
 
+            if path == "/api/v1/sync/attendance" or path == "/api/v1/sync/attendance/":
+                from backend.app.modules.synchronization.router import sync_offline_attendance
+                user = get_current_user(authorization=auth_header, db=db)
+                batch = SyncBatchRequest(**json_data)
+                res = sync_offline_attendance(batch=batch, current_user=user, db=db)
+                return _Response(200, _to_dict(res))
+
             raise ValueError(f"Route {path} not found")
         except HTTPException as e:
             return _Response(e.status_code, {"detail": e.detail})
+        except Exception as e:
+            if "ValidationError" in type(e).__name__:
+                return _Response(422, {"detail": str(e)})
+            raise
         finally:
             gen.close()
 
@@ -275,6 +408,14 @@ class SimpleTestClient:
         gen = get_db()
         db = next(gen)
         try:
+            if path.startswith("/api/v1/attendance/records/"):
+                record_id = int(path.rstrip("/").split("/")[-1])
+                from backend.app.modules.attendance.router import update_record
+                user = get_current_user(authorization=auth_header, db=db)
+                update_in = AttendanceRecordUpdate(**json_data)
+                res = update_record(record_id=record_id, update_in=update_in, db=db, current_user=user)
+                return _Response(200, _to_dict(res))
+
             if path.startswith("/api/v1/students/"):
                 student_id = path.rstrip("/").split("/")[-1]
                 from backend.app.modules.students.router import update_student
@@ -305,6 +446,10 @@ class SimpleTestClient:
             raise ValueError(f"Route {path} not found")
         except HTTPException as e:
             return _Response(e.status_code, {"detail": e.detail})
+        except Exception as e:
+            if "ValidationError" in type(e).__name__:
+                return _Response(422, {"detail": str(e)})
+            raise
         finally:
             gen.close()
 
@@ -342,6 +487,10 @@ class SimpleTestClient:
             raise ValueError(f"Route {path} not found")
         except HTTPException as e:
             return _Response(e.status_code, {"detail": e.detail})
+        except Exception as e:
+            if "ValidationError" in type(e).__name__:
+                return _Response(422, {"detail": str(e)})
+            raise
         finally:
             gen.close()
 
